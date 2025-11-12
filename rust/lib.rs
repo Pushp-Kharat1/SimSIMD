@@ -76,6 +76,7 @@
 
 pub type Distance = f64;
 pub type ComplexProduct = (f64, f64);
+pub type SimsimdSize = u64;
 
 /// Compatibility function for pre 1.85 Rust versions lacking `f32::abs`.
 #[inline(always)]
@@ -147,6 +148,16 @@ extern "C" {
         b_length: usize,
         d: *mut Distance,
     );
+
+    // Stack corruption on 32-bit systems
+    // Wrong values passed to C functions
+    // Potential crashes
+    fn simsimd_dot_f32(
+        a: *const f32, 
+        b: *const f32, 
+        n: SimsimdSize,  // ALWAYS u64
+        d: *mut Distance
+    ); 
 
     fn simsimd_uses_neon() -> i32;
     fn simsimd_uses_neon_f16() -> i32;
@@ -955,8 +966,14 @@ impl SpatialSimilarity for f32 {
             return None;
         }
         let mut distance_value: Distance = 0.0;
-        let distance_ptr: *mut Distance = &mut distance_value as *mut Distance;
-        unsafe { simsimd_dot_f32(a.as_ptr(), b.as_ptr(), a.len(), distance_ptr) };
+        unsafe { 
+            simsimd_dot_f32(
+                a.as_ptr(), 
+                b.as_ptr(), 
+                a.len() as SimsimdSize,  // Explicit cast to u64
+                &mut distance_value
+            ) 
+        };
         Some(distance_value)
     }
 
